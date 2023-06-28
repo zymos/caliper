@@ -1,51 +1,65 @@
 ///////////////////////////////////////////////////////////////////
 //
-//   Enhanced Digital Calipers Display
+//             Enhanced Digital Calipers Display
 //
 //  Description: Added to display to show standardized sizes such
 //    as nut, screw sizes and wire gauges
 //
-//  Author: Zef the Tinker
-//  Date: 2023
+//  Author: 
+//    Zef the Tinker
+//
+//  Date: 
+//    2023
+//
+//  License: 
+//    GPL-v3
 //
 //  Modes: 
-//    Normal mm/in
-//    Nuts:
-//    Screws:
-//    AWG:
-//    Drill-bits:
-//    64th:
+//    * Normal: mm/in
+//    * 64ths, fractions
+//    * Nuts
+//    * Screws
+//    * Screws (including metric) 
+//    * Drill-bits
+//    * Drill-bits (including numbered bits)
 //
-//  other modes to maybe add: 
-//    inter/outer modes, sockets, screw-holes, other wire gauge, 128th
+//  Modes to maybe add: 
+//    * inter/outer modes, sockets, screw-holes, other wire gauge, 128th, AWG(disabled)
 //
 //  Libraries:
-//    https://github.com/adafruit/Adafruit_SSD1306
-//        https://adafruit.github.io/Adafruit_SSD1306/html/index.html
-//    https://github.com/adafruit/Adafruit-GFX-Library
-//        https://learn.adafruit.com/adafruit-gfx-graphics-library
-//    lighter alternative to Adafruit https://github.com/greiman/SSD1306Ascii, but does not support bitmaps
-//
-//  Font
-//    ASCII - chars 0x20 thru 0x7E (standard keyboard chars only) (https://www.ascii-code.com/)
+//    * https://github.com/adafruit/Adafruit_SSD1306
+//        * https://adafruit.github.io/Adafruit_SSD1306/html/index.html
+//    * https://github.com/adafruit/Adafruit-GFX-Library
+//        * https://learn.adafruit.com/adafruit-gfx-graphics-library
 //
 //  Notes:
 //    * avoid too much serial out, takes too much time between reading caliper bits
 //    * Generic I2C OLED displays use SSD1306 chip
 //    * I commented out Adafruit SSD1306 (scrolling, splash, inverting) functions to save 8.2%(~2.5KiB) flash
+//    * Text: ASCII - chars 0x20 thru 0x7E (standard keyboard chars only) (https://www.ascii-code.com/)
+//    * lighter alternative to Adafruit https://github.com/greiman/SSD1306Ascii, but does not support bitmaps
+//    * Wire sizes(AWG) disabled, ran out of progmem
 //
-
-
-// BUG
-//  freeze @ 1.5in
-
+//  Bugs
+//    * if Lithium battery gets below 3.2V screen acts bizarre, and needs recharge
+//      this is because voltage drop across turn on transistor is larger than desirable
+//    * when SERIAL_ENABLE=1 progmem overloads
+//    * Power button need to be held down for a second or two, 
+//       because Arduino boot loader takes a while load, so shutdown pin isnt enabled until then, so I need to add a larger cap.
+//
+//  Debug
+//    * if the output bounces around by large numbers, usually from positive and negative
+//      * voltage to caliper is too low. look are caliper screen
+//    * if screen has odd output, cut off screen or text at wrong position
+//      * lithium battery voltage is too low, making MCU voltage too low, making MCU reset constantly
+//
 /////////////////////////////////////////////////////////////////////////
 
 
-// Arduino
+// Arduino libraries
 #include <Arduino.h>
 
-// OLED
+// OLED libraries
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -54,31 +68,28 @@
 // Local
 #include "tables.h" // data for nut/screw/drill/etc sizes
 #include "PROGMEM_readAnything.h" // some fuctions to open PROGMEM data
-#include "alt_measure_sizes.h" // sizing for nut, screw, drill-bit, etc
+#include "alt_measure_sizes.h" // functions for sizing for nut, screw, drill-bit, etc
 #include "common.h" //global vars
-#include "config.h" //config vars
+#include "config.h" //config vars, pin assignments
 #include "bitmaps.h" // logo for "Goblin Circuits"
 
-// using namespace std;
 
-///////////////////////////////////////////////////////////
-// Pin Assignments
-//  See config.h
+// Pin Assignments in config.h
 
 
 
 
-
-///////////////////////////////////////////////////////////////////
-// Code
-//
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+//// Code
+////
 
 
 
 
 
 
-/////////////////
+/////////////////////////////////////////////////////////////////////////////////////
 // Global Vars
 //
 uint32_t tic_cnt = 0;
@@ -97,10 +108,7 @@ int8_t sign = 0; // 1 or -1
 float measurement_mm = 0;
 float measurement_in = 0;
 float measurement_in_old = 0;
-// char[15] measurement_nut = ''; // text for nut size, ex(#4, 3/8)
-// char[15] measurement_screw = ''; // text for screw size, ex(#8, 1/4)
-// char[15] measurement_drill = ''; // text for drill size, ex(#56, #A, 3/8)
-// char[15] measurement_awg = ''; // text for nut size ex(000, 14, 28)
+
 
 uint8_t no_bit_detected_cnt = 0; // 
 uint8_t data_bit_cnt = 0;
@@ -130,6 +138,13 @@ String awg_stranded_text_s = "";
 
 
 
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+// Initalize
+//
+
+
 // OLED Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -140,7 +155,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 
-////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////
 // Functions
 //
 
@@ -182,28 +197,55 @@ void oled_display_measur(void){
       Serial.println("screw-size");
     }    
     calc_screw(0,1);
-  }else if(mode == 4){ // drill-bit
+  }else if(mode == 4){ // screw-all
+    if(SERIAL_ENABLED){
+      Serial.println("screw-all-size");
+    }    
+    calc_screw_all(0,1);    
+  }else if(mode == 5){ // drill-bit
     if(SERIAL_ENABLED){
       Serial.println("drill-bit size");
     }    
     calc_drill(0,1);
-  }else if(mode == 5){ // AWG solid
+  }else if(mode == 6){ // drill-bit all
     if(SERIAL_ENABLED){
-      Serial.println("AWG(solid)");
+      Serial.println("drill-bit all size");
     }    
-    calc_awg_solid(0,1);
-  }else if(mode == 6){ // AWG stranded
-    if(SERIAL_ENABLED){
-      Serial.println("AWG(stranded)");
-    }    
-    calc_awg_stranded(0,1);
+    calc_drill_all(0,1);
   }
+  // DISABLED - Wire Sizing because ran out of progmem
+  // else if(mode == 7){ // AWG solid
+  //   if(SERIAL_ENABLED){
+  //     Serial.println("AWG(solid)");
+  //   }    
+  //   calc_awg_solid(0,1);
+  // }else if(mode == 8){ // AWG stranded
+  //   if(SERIAL_ENABLED){
+  //     Serial.println("AWG(stranded)");
+  //   }    
+  //   calc_awg_stranded(0,1);
+  // }
   // Display: write the text to OLED
   // oled_display_text(oled_line1, oled_line2);
 
 
 }
 
+
+
+
+
+// oled clear a section of icon area and write 'ALL'
+void oled_add_icon_all_text(void){
+      for(uint8_t x=0; x < 20; x++){
+        for(uint8_t y=18; y <31; y++){
+          display.drawPixel(x,y,0);
+        }
+      }
+      display.setCursor(3,20);
+      display.print("ALL");
+      display.display();
+}
 
 
 
@@ -215,17 +257,18 @@ void oled_display_icon(void){
     // Logo
     //  Set logo here so it only has to update icon once 
     //  bitmap takes some time to update
+
     if(mode == 0){ //normal mode
       // maybe a goblin
       display.clearDisplay();
       display.setCursor(0,0);
       display.setTextSize(4);
-      display.print("~");
-
-      display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
+      display.print("*");
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
      
       display.display();
     }else if(mode == 1){ // 1/64, fraction mode
@@ -238,53 +281,82 @@ void oled_display_icon(void){
       // display.print("/");
       // display.setCursor(9,18);
       // display.print("64");
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
-     display.drawBitmap(0, 0, epd_bitmap_64th_20b, 20, 20, 1); 
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 5, epd_bitmap_64th_20b, 20, 20, 1); //  1/64 icon
       display.display();
     }else if(mode == 2){ // nut mode
       display.clearDisplay();
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
-     display.drawBitmap(0, 0, epd_bitmap_wrench_20b, 20, 20, 1); // a wrench icon
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 5, epd_bitmap_wrench_20b, 20, 20, 1); // a wrench icon
       display.display();
     }else if(mode == 3){ // screw mode
       display.clearDisplay();
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
-     display.drawBitmap(0, 0, epd_bitmap_screw_20b, 20, 20, 1); // screw icon
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 0, epd_bitmap_screw_alt1_20x32, 20, 32, 1); // screw icon
       display.display();
-    }else if(mode == 4){ // drill mode
+          }else if(mode == 4){ // screw-all mode
       display.clearDisplay();
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 0, epd_bitmap_screw_alt1_20x32, 20, 32, 1); // screw icon
 
-     display.drawBitmap(0, 0, epd_bitmap_drill_alt1_20b, 20, 20, 1); // cordless drill icon
+      oled_add_icon_all_text();
       display.display();
-    }else if(mode == 5){ // wire(solid) mode
+    }else if(mode == 5){ // drill mode
       display.clearDisplay();
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
-     display.drawBitmap(0, 0, epd_bitmap_wire_solid_20b, 20, 20, 1); // solid wire icon
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 5, epd_bitmap_drill_alt1_20b, 20, 20, 1); // cordless drill icon
       display.display();
-    }else if(mode == 6){ // wire(stranded) mode
+    }else if(mode == 6){ // drill-all mode
       display.clearDisplay();
-       display.setCursor(0,20);
-      display.setTextSize(1);
-      display.print(mode);
-
-     display.drawBitmap(0, 0, epd_bitmap_wire_stranded_20b, 20, 20, 1); // stranded wire icon
+      if(DEBUG){
+        display.setCursor(0,20);
+        display.setTextSize(1);
+        display.print(mode);
+      }
+      display.drawBitmap(0, 5, epd_bitmap_drill_alt1_20b, 20, 20, 1); // cordless drill icon
+      oled_add_icon_all_text();
       display.display();
     }
+    // DISABLED wire sizes, ran out of progmem
+    // else if(mode == 7){ // wire(solid) mode
+    //   display.clearDisplay();
+    //   if(DEBUG){
+    //     display.setCursor(0,20);
+    //     display.setTextSize(1);
+    //     display.print(mode);
+    //   }
+    //   display.drawBitmap(0, 5, epd_bitmap_wire_solid_20b, 20, 20, 1); // solid wire icon
+    //   display.display();
+    // }else if(mode == 8){ // wire(stranded) mode
+    //   display.clearDisplay();
+    //   if(DEBUG){
+    //     display.setCursor(0,20);
+    //     display.setTextSize(1);
+    //     display.print(mode);
+    //   }
+    //   display.drawBitmap(0, 5, epd_bitmap_wire_stranded_20b, 20, 20, 1); // stranded wire icon
+    //   display.display();
+    // }
 
 }
 
@@ -389,9 +461,9 @@ void oled_clear_text_zone(void){
   // it ends up the drawRect -> fastDrawLine - > loop of drawPixel
   // so i just do it here, and commented out fastdrawlines
   uint8_t x_min = 30;
-  uint8_t x_max = 127;
+  uint8_t x_max = 128;
   uint8_t y_min = 0;
-  uint8_t y_max = 31;
+  uint8_t y_max = 32;
   for(uint8_t x=x_min; x < x_max; x++){
     for(uint8_t y=y_min; y < y_max; y++){
       display.drawPixel(x,y, BLACK);
@@ -425,15 +497,16 @@ void process_cal_bit(void){
 
     // if 24 bit read, data packet is done and ready to be proccessed
     if(data_bit_cnt == 24){
+
+      // if data packet has changed, perform calculations, refresh output
+      // tic_cnt check ensures inital reading, even when no change
+      if(data_cal != data_cal_past || tic_cnt < 1000){
+
         // calculate the measurements from data packet
         calc_measurements();
 
         // find alternative measurments
         calc_alt_sizes();
-      // if data packet has changed, perform calculations, refresh output
-      if(data_cal != data_cal_past){
-
-
 
         // get display details
         oled_display_measur();
@@ -452,65 +525,6 @@ void process_cal_bit(void){
 
 
 
-
-// // Display mode and set old text and logo
-// void display_settings(void){
-
-//   if(SERIAL_ENABLED){
-//     Serial.print("Mode: ");
-//   }
-
-//   // these options should be equal to MAX MODES
-//   if(mode == 0){ // mm-inch
-//     if(SERIAL_ENABLED){
-//       Serial.println("mm/inches");
-//     } 
-//     oled_line1 = "";
-//     oled_line2 = "";
-//     // oled_icon =;   
-
-//   }else if(mode == 1){ //fractions
-//     if(SERIAL_ENABLED){
-//       Serial.println("fractions");
-//     }    
-//     oled_line1 = "";
-//     oled_line2 = "";
-//     // oled_icon =; 
-
-//   }else if(mode == 2){ // nuts-socket
-//     if(SERIAL_ENABLED){
-//       Serial.println("nuts/socket");
-//     }    
-//     oled_line1 = "";
-//     oled_line2 = "";
-//     // oled_icon =;
-
-//   }else if(mode == 3){ // screw
-//     if(SERIAL_ENABLED){
-//       Serial.println("screw-size");
-//     }    
-//     oled_line1 = screw_text_s;
-//     oled_line2 = "";
-//     // oled_icon =;
-
-//   }else if(mode == 4){ // drill-bit
-//     if(SERIAL_ENABLED){
-//       Serial.println("drill-bit size");
-//     }    
-//     oled_line1 = drill_text_s;
-//     oled_line2 = "";
-//     // oled_icon =;
-
-//   }else if(mode == 5){ // AWG
-//     if(SERIAL_ENABLED){
-//       Serial.println("AWG");
-//     }    
-//     oled_line1 = "";
-//     oled_line2 = "";
-//     // oled_icon =; 
-//   }
-
-// }
 
 
 
@@ -612,8 +626,8 @@ void calc_alt_sizes(void){
     calc_screw(1,0);
     calc_drill(1,0);
     calc_fraction(1,0);
-    calc_awg_solid(1,0);
-    calc_awg_stranded(1,0);
+    // calc_awg_solid(1,0);
+    // calc_awg_stranded(1,0);
     // awg_solid = calc_alt_sizes_ave(*wire_solid, "AWG(solid)");
   }
 
@@ -733,7 +747,7 @@ void loop()
 
 
   // clk falling edge detected
-  if( clk_cur_state == 0 && clk_prev_state == 1 ){
+  if( clk_cur_state == 0 && clk_prev_state == 1){
     if(DEBUG){ // display data bit detected
       Serial.print("o");
     }
@@ -771,6 +785,16 @@ void loop()
   if(measurement_in != measurement_in_old){
     tic_cnt_change = tic_cnt;
   }
+  // else{
+  //   if(1){
+  //     if(tic_cnt % 100 == 0){
+  //       display.setCursor(90,18);
+  //       display.setTextSize(1);
+  //       display.print(tic_cnt % 100);
+  //       display.display();
+  //     }
+  //   }
+  // }
   if( tic_cnt > (long)SHUTDOWN_TIME * 1000 * 1000 / CLK_TIC_TIME + tic_cnt_change){
     // shut down does not work if UART/programmer is attached, even if Vcc is cut
     if(SERIAL_ENABLED){
@@ -780,8 +804,8 @@ void loop()
     // UNCOMMENT THIS LATER
 
 
-    // digitalWrite(PIN_SOFT_POWER_OFF, LOW);
-    // digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(PIN_SOFT_POWER_OFF, LOW);
+    digitalWrite(LED_BUILTIN, HIGH);
     // delay(1000); // MCU should be shut off but this will halt when debuging
     // delay(1000);
     // delay(1000);

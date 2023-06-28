@@ -21,7 +21,7 @@
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 // #define SSD1306_NO_SPLASH 1
 
-#define OLED_X_POS_DEFAULT 37 // default start pos for text
+#define OLED_X_POS_DEFAULT 30 // default start pos for text
 #define Y_POS_2ND_LINE_DEFAULT 18 // default start Y-pos for second line text
 
 
@@ -31,7 +31,7 @@
 #define SERIAL_ENABLED 0 // enable serial output UART
 
 
-#define SHUTDOWN_TIME 990 //seconds
+#define SHUTDOWN_TIME 90 //seconds
 #define CLK_TIC_TIME 50 // microseconds (for loop)
 
 
@@ -43,4 +43,4 @@
 
 
 
-#define MAX_MODES 6  // number of modes
+#define MAX_MODES 6  // number of modes, increase to add different sizings
