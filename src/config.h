@@ -28,7 +28,7 @@
 // Configuration
 #define DEBUG 0 // debug messages, UART
 // #define CALC_ALL_SIZES 1 // debug to calc all sizes, output on UART
-#define SERIAL_ENABLED 0 // enable serial output UART
+#define SERIAL_ENABLED 1 // enable serial output UART
 
 
 #define SHUTDOWN_TIME 90 //seconds

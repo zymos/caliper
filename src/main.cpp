@@ -14,6 +14,7 @@
 //  License: 
 //    GPL-v3
 //
+//  Features:
 //  Modes: 
 //    * Normal: mm/in
 //    * 64ths, fractions
@@ -23,8 +24,13 @@
 //    * Drill-bits
 //    * Drill-bits (including numbered bits)
 //
+//  Missing features:
+//    * no shutdown button, easy to add it you want
+//    * more modes, like AWG, ran out of progmem
+//    * no integrated zero button, uses calipers zero button  
+//
 //  Modes to maybe add: 
-//    * inter/outer modes, sockets, screw-holes, other wire gauge, 128th, AWG(disabled)
+//    * screw hole mode, sockets, screw-holes, AWG, other wire gauge, 128th
 //
 //  Libraries:
 //    * https://github.com/adafruit/Adafruit_SSD1306
@@ -258,6 +264,8 @@ void oled_display_icon(void){
     //  Set logo here so it only has to update icon once 
     //  bitmap takes some time to update
 
+  if(!SERIAL_ENABLED){ // disable logos to save mem, otherwise run out of mem with serial 
+
     if(mode == 0){ //normal mode
       // maybe a goblin
       display.clearDisplay();
@@ -337,6 +345,7 @@ void oled_display_icon(void){
       oled_add_icon_all_text();
       display.display();
     }
+  }
     // DISABLED wire sizes, ran out of progmem
     // else if(mode == 7){ // wire(solid) mode
     //   display.clearDisplay();
