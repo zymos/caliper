@@ -13,10 +13,11 @@
 
 // OLED
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // OLED display TWI address
   // Address 0x3C for 128x32
-  // 0x3D (for the 128x64)
+  // 0x78 -> 0x3C (for the 128x64) set on back
+  // 0x7A -> 0x3D (for the 128x64)
 #define OLED_ADDR   0x3C
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 // #define SSD1306_NO_SPLASH 1
@@ -26,12 +27,17 @@
 
 
 // Configuration
-#define DEBUG 0 // debug messages, UART
+#define DEBUG 0 // debug messages, UART (SERIAL must be enabled)
+#define DEBUG2 0 // more debug, UART (SERIAL must be enabled)
+#define OLED_DEBUG 0 // output debug info on OLED
 // #define CALC_ALL_SIZES 1 // debug to calc all sizes, output on UART
-#define SERIAL_ENABLED 1 // enable serial output UART
+#define SERIAL_ENABLED 0 // enable serial output UART, when enabled, oled is disabled to avoid mem overload
 
+#define OLED_ENABLED 1 // you may have to disable when SERIAL_ENABLED
 
-#define SHUTDOWN_TIME 90 //seconds
+// #define SHUTDOWN_TIME 90 //seconds
+#define SHUTDOWN_TIME 999 //seconds
+
 #define CLK_TIC_TIME 50 // microseconds (for loop)
 
 

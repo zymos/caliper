@@ -9,10 +9,22 @@
 
 #pragma once
 #include <Arduino.h>  // for type definitions
-#include "common.h" //global vars
-#include "config.h" //config vars
-#include "PROGMEM_readAnything.h"
 
+#include <Arduino.h>
+
+// OLED libraries
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// Local
+#include "tables.h" // data for nut/screw/drill/etc sizes
+#include "PROGMEM_readAnything.h" // some fuctions to open PROGMEM data
+#include "common.h" //global vars
+#include "config.h" //config vars, pin assignments
+#include "bitmaps.h" // icons
+#include "oled.h" // oled functions
 
 
 
@@ -24,12 +36,17 @@ void calc_screw_all(uint8_t output_serial, uint8_t output_oled){
   String text_s2 = "";
   String text_s3 = "";
   String sign = "";
-  
+ 
+  String text_s_m = "";
+  String text_s1_m = "";
+  String text_s2_m = "";
+  String text_s3_m = ""; 
   // example text
   // '7/32"           +10%'
   // '#0, #1, 5/32    - 5%'
 
-  // Nuts
+  float inches_std = 999;
+  float inches_m = 999;
   uint8_t x=0;
   uint8_t set = 0;
   float percent = 0;
@@ -39,7 +56,7 @@ void calc_screw_all(uint8_t output_serial, uint8_t output_oled){
   // alt_measur_table nextItem;
   // get first element
   PROGMEM_readAnything(&screw [0], thisItem);
-  PROGMEM_readAnything(&screw_m [0], thisItem_m);
+  // PROGMEM_readAnything(&screw_m [0], thisItem_m);
   
   
   // M1 < #1
@@ -56,7 +73,8 @@ void calc_screw_all(uint8_t output_serial, uint8_t output_oled){
       PROGMEM_readAnything(&screw [x], thisItem);
       // Serial.print('.');
       if(measurement_in <= thisItem.inches){
-        set = 1;
+          set = 1;
+          inches_std = thisItem.inches;
           percent = 100 * (thisItem.inches - measurement_in) / measurement_in;
 
           // percent_s = String(String(percent, 1) + "%");
@@ -79,13 +97,78 @@ void calc_screw_all(uint8_t output_serial, uint8_t output_oled){
     text_s = String(text_s1 + text_s2);
 
   }
-  if(output_oled){
+ 
+  //
+  //  extra bits
+  //
+  PROGMEM_readAnything(&screw_m [0], thisItem_m);
+  // set = 0;
+  if(measurement_in < thisItem_m.inches){ // smaller than smallest screw
+    text_s1_m = String("< min");
+    text_s2_m = String("screw size");
+
+    text_s_m = String("< min size");
+    set = 1;
+    if(DEBUG2){Serial.println("size < M(min)," + String(thisItem_m.inches));}
+  }else{
+    while(thisItem_m.inches != 0){ // loop unit
+      
+      PROGMEM_readAnything(&screw_m [x], thisItem_m);
+      //  PROGMEM_readAnything(&screw [x+1], nextItem);
+      // Serial.print('.');
+      if(measurement_in <= thisItem_m.inches){
+        set = 1;
+        inches_m = thisItem_m.inches;
+        percent = 100 * (thisItem_m.inches - measurement_in) / measurement_in;
+
+        // percent_s = String("(" + String(percent, 1) + "%)");
+        text_s_m = String(String(thisItem_m.text) + "," + String(percent, 0) + "%");
+        text_s1_m = String(thisItem_m.text);          
+        if(percent > 0){
+          sign = "+";
+        }
+        text_s2_m = String(sign + String(percent, 0) + "%");
+
+        if(DEBUG2){Serial.println("M(size)" + String(thisItem_m.inches));}
+        break;
+      }
+
+      x++; 
+    }
+  }
+  if(set == 0){
+    text_s_m = "> max size";
+    text_s1_m = String("> max");
+    text_s2_m = String("screw size");
+    if(DEBUG2){Serial.println("size > M(max)");}
+  } 
+
+        // if(DEBUG2){Serial.println("M(size)qq" + String(thisItem_m.inches));}
+  // check which is closest
+  if(inches_m != 999 && inches_std == 999){
+    //  std bits out of spec, numb bit found
+    text_s = text_s_m;
+    text_s1 = text_s1_m;
+    text_s2 = text_s2_m;
+    if(SERIAL_ENABLED){Serial.println(String("screw-all(S/M): min M closest" +  String(inches_std,3) + "/" + String(inches_m,3)));}
+  }else if( abs(measurement_in - inches_std) > abs(measurement_in - inches_m)){
+    // closest bit is numbered bits
+    text_s = text_s_m;
+    text_s1 = text_s1_m;
+    text_s2 = text_s2_m;
+    if(SERIAL_ENABLED){Serial.println(String("screw-all(S/M): M closest" + String(inches_std,3) + "/" + String(inches_m,3)));}
+  }else{ 
+    // else closest bit is std, so keep the text the same
+    if(SERIAL_ENABLED){Serial.println(String("screw-all(S/M): std closest" +  String(inches_std,3) + "/" + String(inches_m,3)));}
+  }
+
+ if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
   }
   if(output_serial){
-    Serial.print("Screw: ");
+    Serial.print("Screw-all: ");
     Serial.println(text_s);
   }
 
@@ -153,7 +236,7 @@ void calc_screw(uint8_t output_serial, uint8_t output_oled){
     text_s = String(text_s1 + text_s2);
   }
   
-  if(output_oled){
+  if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -296,7 +379,7 @@ void calc_drill(uint8_t output_serial, uint8_t output_oled){
     text_s2 = String("drill size");
 
   }
-  if(output_oled){
+  if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -387,39 +470,39 @@ void calc_drill_all(uint8_t output_serial, uint8_t output_oled){
   //
   //  extra bits
   //
-  // PROGMEM_readAnything(&drill_num [0], thisItem_num);
+  PROGMEM_readAnything(&drill_num [0], thisItem_num);
 
-  // if(measurement_in < thisItem_num.inches){ // smaller than smallest drill
-  //   text_s1_num = String("< min");
-  //   text_s2_num = String("drill size");
+  if(measurement_in < thisItem_num.inches){ // smaller than smallest drill
+    text_s1_num = String("< min");
+    text_s2_num = String("drill size");
 
-  //   text_s_num = String("< min size");
-  //   set = 1;
-  // }else{
-  //   while(thisItem_num.inches != 0){ // loop unit
+    text_s_num = String("< min size");
+    set = 1;
+  }else{
+    while(thisItem_num.inches != 0){ // loop unit
       
-  //     PROGMEM_readAnything(&drill_num [x], thisItem_num);
-  //     //  PROGMEM_readAnything(&drill [x+1], nextItem);
-  //     // Serial.print('.');
-  //     if(measurement_in <= thisItem_num.inches){
-  //       set = 1;
-  //       inches_num = thisItem_num.inches;
-  //       percent = 100 * (thisItem_num.inches - measurement_in) / measurement_in;
+      PROGMEM_readAnything(&drill_num [x], thisItem_num);
+      //  PROGMEM_readAnything(&drill [x+1], nextItem);
+      // Serial.print('.');
+      if(measurement_in <= thisItem_num.inches){
+        set = 1;
+        inches_num = thisItem_num.inches;
+        percent = 100 * (thisItem_num.inches - measurement_in) / measurement_in;
 
-  //       // percent_s = String("(" + String(percent, 1) + "%)");
-  //       text_s_num = String(String(thisItem_num.text) + "," + String(percent, 0) + "%");
-  //       text_s1_num = String(thisItem_num.text);          
-  //       if(percent > 0){
-  //         sign = "+";
-  //       }
-  //       text_s2_num = String(sign + String(percent, 0) + "%");
+        // percent_s = String("(" + String(percent, 1) + "%)");
+        text_s_num = String(String(thisItem_num.text) + "," + String(percent, 0) + "%");
+        text_s1_num = String(thisItem_num.text);          
+        if(percent > 0){
+          sign = "+";
+        }
+        text_s2_num = String(sign + String(percent, 0) + "%");
 
-  //       break;
-  //     }
+        break;
+      }
 
-  //     x++; 
-  //   }
-  // }
+      x++; 
+    }
+  }
   if(set == 0){
     text_s_num = "> max size";
     text_s1_num = String("> max");
@@ -432,22 +515,26 @@ void calc_drill_all(uint8_t output_serial, uint8_t output_oled){
     text_s = text_s_num;
     text_s1 = text_s1_num;
     text_s2 = text_s2_num;
+    if(SERIAL_ENABLED){Serial.println(String("Drill-all(S/N): min num-bit closest" +  String(inches_std,3) + "/" + String(inches_num,3)));}
   }else if( abs(measurement_in - inches_std) > abs(measurement_in - inches_num)){
     // closest bit is numbered bits
     text_s = text_s_num;
     text_s1 = text_s1_num;
     text_s2 = text_s2_num;
+    if(SERIAL_ENABLED){Serial.println(String("Drill-all(S/N): num-bit closest" + String(inches_std,3) + "/" + String(inches_num,3)));}
+  }else{ 
+    // else closest bit is std, so keep the text the same
+    if(SERIAL_ENABLED){Serial.println(String("Drill-all(S/N): std closest" +  String(inches_std,3) + "/" + String(inches_num,3)));}
   }
-  // else closest bit is std, so keep the text the same
 
 
-  if(output_oled){
+  if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
   }
   if(output_serial){
-    Serial.print("Drill: ");
+    Serial.print("Drill-all: ");
     Serial.println(text_s);
   }
 
@@ -476,7 +563,7 @@ void calc_fraction(uint8_t output_serial, uint8_t output_oled){
   String sign = "";
   String alt_sign = "  ";
 
-
+oled_debug_text("ssnns");
 
   // split interger and fraction of currect reading
   //  data table only has up to 1 to save mem space
@@ -544,7 +631,7 @@ void calc_fraction(uint8_t output_serial, uint8_t output_oled){
     text_s1 = "> 6\"";        
     text_s2 = "";
   }
-  if(output_oled){
+  if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -618,7 +705,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
     text_s2 = String(name + " size");
 
   }
-  if(output_oled){
+  if(output_oled && OLED_ENABLED){
     oled_clear_text_zone();
     oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
     oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -661,7 +748,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     text_s = String("< min AWG");
 //     text_s1 = String("< min");
 //     text_s2 = String("AWG size");
-//     if(output_oled){
+//     if(output_oled && OLED_ENABLED){
 // 			oled_clear_text_zone();
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -685,7 +772,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     }
 
 //     if(set){
-//       if(output_oled){
+//       if(output_oled && OLED_ENABLED){
 // 			  oled_clear_text_zone();
 //         oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //         oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -696,7 +783,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     text_s = "> max AWG";
 //     text_s1 = String("< min");
 //     text_s2 = String("AWG");
-//     if(output_oled){
+//     if(output_oled && OLED_ENABLED){
 // 			oled_clear_text_zone();
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -736,7 +823,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     text_s = String("< min AWG");
 //     text_s1 = String("< min");
 //     text_s2 = String("AWG");
-//     if(output_oled){
+//     if(output_oled && OLED_ENABLED){
 // 			oled_clear_text_zone();
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -762,7 +849,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     }
 
 //     if(set){
-//       if(output_oled){
+//       if(output_oled && OLED_ENABLED){
 // 			  oled_clear_text_zone();
 //         oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //         oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)
@@ -773,7 +860,7 @@ void calc_nut(uint8_t output_serial, uint8_t output_oled){
 //     text_s = "> max AWG";
 //     text_s1 = String("< min");
 //     text_s2 = String("AWG");
-//     if(output_oled){
+//     if(output_oled && OLED_ENABLED){
 // 			oled_clear_text_zone();
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,0,2,text_s1); // (line,pos_x,pos_y,size,text)
 //       oled_display_text2(0,OLED_X_POS_DEFAULT,Y_POS_2ND_LINE_DEFAULT,1,text_s2); // (line,pos_x,pos_y,size,text)

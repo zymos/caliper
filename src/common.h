@@ -5,7 +5,14 @@
 
 
 #pragma once
+// Arduino libraries
+#include <Arduino.h>
+#include "config.h" //config vars, pin assignments
 
+
+
+// // OLED Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+// Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //////////////////
 // prototypes
@@ -14,11 +21,16 @@ void output_measurements_uart(void);
 void process_cal_bit(void);
 void calc_measurements(void);
 void calc_alt_sizes(void);
+
 void display_settings(void);
 void oled_display_text(String, String);
-void oled_display_measur(void);;
+void oled_display_measur(void);
 void oled_display_text2(uint8_t, uint8_t, uint8_t, uint8_t,String); // (line, pos_x, pos_y, size, text)/
 void oled_clear_text_zone(void);
+void oled_clear_zone(uint8_t, uint8_t, uint8_t, uint8_t);
+void oled_debug_text(String);
+void oled_display_icon(void);
+
 // void oled_
 void calc_nut(uint8_t, uint8_t);
 void calc_screw(uint8_t, uint8_t);
@@ -121,3 +133,4 @@ extern String oled_line2;
  extern  String fraction_text_s;
  extern  String awg_solid_text_s;
  extern  String awg_stranded_text_s;
+
